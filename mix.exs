@@ -15,8 +15,13 @@ defmodule DIN.MixProject do
         # The main page in the docs
         main: "DIN",
         extras: ["README.md"],
+        groups_for_modules: [
+          "Validation Protocols": [
+            DIN.Validations.Protocols.Max,
+            DIN.Validations.Protocols.Min
+          ]
+        ],
         groups_for_functions: [
-          Core: &(&1[:scope] == :core),
           "Type functions": &(&1[:scope] == :type),
           "Validation functions": &(&1[:scope] == :validation)
         ]

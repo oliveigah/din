@@ -66,7 +66,6 @@ defmodule DIN do
       iex> DIN.normalize(input, schema)
       {:ok, %{username: "oliveigah", age: 26, address: %{street: "Baker Street"}}}
   """
-  @doc scope: :core
   def normalize(input, schema) do
     case do_normalize(input, Map.to_list(schema), %{}, []) do
       {normalized_input, []} ->
@@ -81,12 +80,11 @@ defmodule DIN do
 
   defp do_normalize(input, [{key, validation_fun_list} | schema_rest], acc_input, acc_errors) do
     value = get_value_from_input(key, input)
-    results = Enum.map(validation_fun_list, fn fun -> fun.(value) end)
-    normalized_value = get_value_from_validations(value, results)
+    {normalized_value, errors_list} = execute_functions(validation_fun_list, value)
 
-    case filter_validations_by_type(:type_error, results) do
+    case filter_errors_by_type(:type_error, errors_list) do
       [] ->
-        case filter_validations_by_type(:validation_error, results) do
+        case filter_errors_by_type(:validation_error, errors_list) do
           [] ->
             new_normalized_input = Map.put(acc_input, key, normalized_value)
             do_normalize(input, schema_rest, new_normalized_input, acc_errors)
@@ -102,70 +100,165 @@ defmodule DIN do
     end
   end
 
+  defp execute_functions(func_list, val), do: do_execute_functions(func_list, val, [])
+
+  defp do_execute_functions([], val, errors), do: {val, errors}
+
+  defp do_execute_functions([fun | fun_rest], val, errors) do
+    case fun.(val) do
+      :ok ->
+        do_execute_functions(fun_rest, val, errors)
+
+      {:ok, new_val} ->
+        do_execute_functions(fun_rest, new_val, errors)
+
+      error ->
+        do_execute_functions(fun_rest, val, [error | errors])
+    end
+  end
+
   defp get_value_from_input(key, input),
     do: Map.get(input, Atom.to_string(key)) || Map.get(input, key) || :din_val_not_found
 
   defp parse_errors(key, errors_list),
     do: Enum.map(errors_list, fn {_, msg} -> %{name: key, reason: msg} end)
 
-  defp filter_validations_by_type(type, errrors_list),
+  defp filter_errors_by_type(type, errrors_list),
     do: Enum.filter(errrors_list, fn result -> match?({^type, _}, result) end)
-
-  defp get_value_from_validations(current_value, results) do
-    case Enum.find(results, fn e -> match?({:ok, _}, e) end) do
-      nil -> current_value
-      {:ok, normalized_val} -> normalized_val
-    end
-  end
 
   # TYPES
   @doc scope: :type
-  def string() do
-    fn val ->
-      if is_bitstring(val), do: :ok, else: {:type_error, "must be a string"}
-    end
-  end
+  @doc """
+  Validates that the input value is a string.
 
+  ## Examples
+      iex> schema = %{username: [DIN.string()]}
+      iex> input = %{ "username" => "oliveigah"}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{username: "oliveigah"}}
+
+      iex> schema = %{username: [DIN.string()]}
+      iex> input = %{ "username" => 123}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :username, reason: "must be a string"}]}
+  """
+  defdelegate string(), to: DIN.Types
   @doc scope: :type
-  def number() do
-    fn val ->
-      if is_number(val), do: :ok, else: {:type_error, "must be a number"}
-    end
-  end
+  @doc """
+  Validates that the input value is a number.
 
+  ## Examples
+      iex> schema = %{age: [DIN.number()]}
+      iex> input = %{"age" => 26}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{age: 26}}
+
+      iex> schema = %{money: [DIN.number()]}
+      iex> input = %{"money" => 12.95}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{money: 12.95}}
+
+      iex> schema = %{age: [DIN.number()]}
+      iex> input = %{ "age" => "123"}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :age, reason: "must be a number"}]}
+  """
+  defdelegate number(), to: DIN.Types
   @doc scope: :type
-  def map(schema) do
-    fn val ->
-      if is_map(val) do
-        case normalize(val, schema) do
-          {:ok, normalized_val} ->
-            {:ok, normalized_val}
+  @doc """
+  Validates that the input value is a map and its value matches the given schema.
 
-          {:error, errors} ->
-            {:validation_error, errors}
-        end
-      else
-        {:type_error, "must be an object"}
-      end
-    end
-  end
+  ## Examples
+      iex> schema = %{address: [DIN.map(%{street: [DIN.string()]})]}
+      iex> input = %{ "address" => %{"street" => "Baker street"}}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{address: %{street: "Baker street"}}}
+
+      iex> schema = %{address: [DIN.map(%{street: [DIN.string()]})]}
+      iex> input = %{ "address" => "baker street"}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :address, reason: "must be an object"}]}
+
+      iex> schema = %{address: [DIN.map(%{street: [DIN.string()]})]}
+      iex> input = %{ "address" => %{"street" => 12}}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :address, reason: [%{name: :street, reason: "must be a string"}]}]}
+  """
+  defdelegate map(schema), to: DIN.Types
+
+  # TRANSFORMATIONS
 
   # VALIDATIONS
-  defp do_min(val, min_val) when is_number(val) do
-    if val >= min_val,
-      do: :ok,
-      else: {:validation_error, "must be greater than or equal to #{min_val}"}
-  end
-
-  defp do_min(val, min_val) when is_bitstring(val) do
-    if String.length(val) >= min_val,
-      do: :ok,
-      else: {:validation_error, "must have at least #{min_val} characters"}
-  end
-
-  defp do_min(_, _),
-    do: {:validation_error, "validation function not applicable for the type"}
-
   @doc scope: :validation
-  def min(min_val), do: &do_min(&1, min_val)
+  @doc """
+  Validates that the input has at least the given value.
+
+  The behavior of this functions varies accordingly to input types.
+
+  - String: Validates input length
+  - Number: Validates input value
+
+  ## Examples
+      iex> schema = %{username: [DIN.min(5)]}
+      iex> input = %{ "username" => "abcde"}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{username: "abcde"}}
+
+      iex> schema = %{username: [DIN.min(5)]}
+      iex> input = %{ "username" => "abcd"}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :username, reason: "must have at least 5 characters"}]}
+
+      iex> schema = %{age: [DIN.min(8)]}
+      iex> input = %{ "age" => 9}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{age: 9}}
+
+      iex> schema = %{age: [DIN.min(8)]}
+      iex> input = %{ "age" => 7}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :age, reason: "must be greater than or equal to 8"}]}
+
+      iex> schema = %{age: [DIN.min(8)]}
+      iex> input = %{ "age" => :not_valid_type}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :age, reason: "validation function not applicable for the input type"}]}
+  """
+  defdelegate min(min_val), to: DIN.Validations.Min
+  @doc scope: :validation
+  @doc """
+  Validates that the input has at maximum the given value.
+
+  The behavior of this functions varies accordingly to input types.
+
+  - String: Validates input length
+  - Number: Validates input value
+
+  ## Examples
+      iex> schema = %{username: [DIN.max(5)]}
+      iex> input = %{ "username" => "abcde"}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{username: "abcde"}}
+
+      iex> schema = %{username: [DIN.max(5)]}
+      iex> input = %{ "username" => "abcdef"}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :username, reason: "must have at maximum 5 characters"}]}
+
+      iex> schema = %{age: [DIN.max(7)]}
+      iex> input = %{ "age" => 7}
+      iex> DIN.normalize(input, schema)
+      {:ok, %{age: 7}}
+
+      iex> schema = %{age: [DIN.max(7)]}
+      iex> input = %{ "age" => 8}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :age, reason: "must be lesser than or equal to 7"}]}
+
+      iex> schema = %{age: [DIN.max(8)]}
+      iex> input = %{ "age" => :not_valid_type}
+      iex> DIN.normalize(input, schema)
+      {:error, [%{name: :age, reason: "validation function not applicable for the input type"}]}
+  """
+  defdelegate max(max_val), to: DIN.Validations.Max
 end
