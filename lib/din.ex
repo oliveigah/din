@@ -224,7 +224,7 @@ defmodule DIN do
       iex> DIN.normalize(input, schema)
       {:error, [%{name: :age, reason: "validation function not applicable for the input type"}]}
   """
-  defdelegate min(min_val), to: DIN.Validations.Min
+  defdelegate min(min_val), to: DIN.Validations.Min, as: :execute
   @doc scope: :validation
   @doc """
   Validates that the input has at maximum the given value.
@@ -260,5 +260,5 @@ defmodule DIN do
       iex> DIN.normalize(input, schema)
       {:error, [%{name: :age, reason: "validation function not applicable for the input type"}]}
   """
-  defdelegate max(max_val), to: DIN.Validations.Max
+  defdelegate max(max_val), to: DIN.Validations.Max, as: :execute
 end

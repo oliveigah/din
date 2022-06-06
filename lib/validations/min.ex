@@ -1,6 +1,6 @@
 defmodule DIN.Validations.Min do
   @moduledoc false
-  def min(min_val), do: &DIN.Validations.Protocols.Min.validate(&1, min_val)
+  def execute(min_val), do: &DIN.Validations.Protocols.Min.validate(&1, min_val)
 end
 
 defprotocol DIN.Validations.Protocols.Min do

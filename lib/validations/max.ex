@@ -1,6 +1,6 @@
 defmodule DIN.Validations.Max do
   @moduledoc false
-  def max(max_val), do: &DIN.Validations.Protocols.Max.validate(&1, max_val)
+  def execute(max_val), do: &DIN.Validations.Protocols.Max.validate(&1, max_val)
 end
 
 defprotocol DIN.Validations.Protocols.Max do
