@@ -30,3 +30,11 @@ defimpl DIN.Validations.Protocols.Min, for: [Integer, Float] do
       else: {:validation_error, "must be greater than or equal to #{min_val}"}
   end
 end
+
+defimpl DIN.Validations.Protocols.Min, for: List do
+  def validate(val, min_val) do
+    if Enum.count_until(val, min_val) >= min_val,
+      do: :ok,
+      else: {:validation_error, "must contain at least #{min_val} items"}
+  end
+end

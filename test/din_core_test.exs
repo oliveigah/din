@@ -20,6 +20,15 @@ defmodule DIN.CoreTest do
             })
           ]
         })
+      ],
+      contacts: [
+        DIN.list([
+          DIN.map(%{
+            full_name: [DIN.string(), DIN.min(5)],
+            phone: [DIN.number(), DIN.max(10)]
+          })
+        ]),
+        DIN.max(3)
       ]
     }
 
@@ -33,7 +42,12 @@ defmodule DIN.CoreTest do
           "street" => "dasuh12312313123asdfa",
           "number" => 220
         }
-      }
+      },
+      "contacts" => [
+        %{"full_name" => "abcdef", phone: 1},
+        %{"full_name" => "abcdefg", phone: 2},
+        %{"full_name" => "abcdefgh", phone: 3}
+      ]
     }
 
     assert {:ok,
@@ -44,8 +58,13 @@ defmodule DIN.CoreTest do
                 name: "testeasdasdasdasdasdas",
                 some_number: 10.2
               },
-              username: "teste"
+              username: "teste",
+              contacts: contacts
             }} = DIN.normalize(input, schema)
+
+    assert %{full_name: "abcdef", phone: 1} in contacts
+    assert %{full_name: "abcdefg", phone: 2} in contacts
+    assert %{full_name: "abcdefgh", phone: 3} in contacts
   end
 
   test "should return all validation errors {:error, error_list}" do
@@ -63,6 +82,15 @@ defmodule DIN.CoreTest do
             })
           ]
         })
+      ],
+      contacts: [
+        DIN.list([
+          DIN.map(%{
+            full_name: [DIN.string(), DIN.min(5)],
+            phone: [DIN.number(), DIN.max(10)]
+          })
+        ]),
+        DIN.max(3)
       ]
     }
 
@@ -76,21 +104,55 @@ defmodule DIN.CoreTest do
           "street" => "da",
           "number" => 20
         }
-      }
+      },
+      "contacts" => [
+        %{"full_name" => "abc", phone: 1},
+        %{"full_name" => "abcdefg", phone: 20},
+        %{"full_name" => "abcdefgh", phone: "abc"},
+        %{"full_name" => "abcdefgh", phone: 4}
+      ]
     }
 
     assert {:error, error_list} = DIN.normalize(input, schema)
 
     assert %{name: :username, reason: "must have at least 4 characters"} in error_list
     assert %{name: :age, reason: "must be greater than or equal to 5"} in error_list
-    assert %{name: :metadata, reason: metadata_errors} = find_error(error_list, :metadata)
+    assert %{name: :contacts, reason: "must contain a maximum of 3 items"} in error_list
 
-    assert %{name: :some_number, reason: "must be lesser than or equal to 12"} in metadata_errors
-    assert %{name: :name, reason: "must have at least 10 characters"} in metadata_errors
-    assert %{name: :address, reason: address_errors} = find_error(metadata_errors, :address)
+    assert %{name: :some_number, reason: "must be lesser than or equal to 12"} in find_error(
+             error_list,
+             [:metadata, :some_number]
+           )
 
-    assert %{name: :street, reason: "must have at least 10 characters"} in address_errors
-    assert %{name: :number, reason: "must be greater than or equal to 80"} in address_errors
+    assert %{name: :name, reason: "must have at least 10 characters"} in find_error(
+             error_list,
+             [:metadata, :name]
+           )
+
+    assert %{name: :street, reason: "must have at least 10 characters"} in find_error(
+             error_list,
+             [:metadata, :address, :street]
+           )
+
+    assert %{name: :number, reason: "must be greater than or equal to 80"} in find_error(
+             error_list,
+             [:metadata, :address, :number]
+           )
+
+    assert %{name: :full_name, reason: "must have at least 5 characters"} in find_error(
+             error_list,
+             [:contacts, "index_1", :full_name]
+           )
+
+    assert %{name: :phone, reason: "must be lesser than or equal to 10"} in find_error(
+             error_list,
+             [:contacts, "index_2", :phone]
+           )
+
+    assert %{name: :phone, reason: "must be a number"} in find_error(
+             error_list,
+             [:contacts, "index_3", :phone]
+           )
   end
 
   test "should return only type errors {:error, error_list}" do
@@ -156,10 +218,20 @@ defmodule DIN.CoreTest do
 
     assert %{name: :username, reason: "must have at least 4 characters"} in error_list
     assert %{name: :age, reason: "must be a number"} in error_list
-    assert %{name: :metadata, reason: metadata_errors} = find_error(error_list, :metadata)
 
-    assert %{name: :some_number, reason: "must be lesser than or equal to 12"} in metadata_errors
-    assert %{name: :name, reason: "must have at least 10 characters"} in metadata_errors
-    assert %{name: :address, reason: "must be an object"} in metadata_errors
+    assert %{name: :some_number, reason: "must be lesser than or equal to 12"} in find_error(
+             error_list,
+             [:metadata, :some_number]
+           )
+
+    assert %{name: :name, reason: "must have at least 10 characters"} in find_error(
+             error_list,
+             [:metadata, :name]
+           )
+
+    assert %{name: :address, reason: "must be an object"} in find_error(
+             error_list,
+             [:metadata, :address]
+           )
   end
 end

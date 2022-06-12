@@ -30,3 +30,11 @@ defimpl DIN.Validations.Protocols.Max, for: [Integer, Float] do
       else: {:validation_error, "must be lesser than or equal to #{max_val}"}
   end
 end
+
+defimpl DIN.Validations.Protocols.Max, for: List do
+  def validate(val, max_val) do
+    if Enum.count_until(val, max_val + 1) <= max_val,
+      do: :ok,
+      else: {:validation_error, "must contain a maximum of #{max_val} items"}
+  end
+end

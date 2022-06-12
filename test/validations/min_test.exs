@@ -47,4 +47,15 @@ defmodule DIN.Validations.MinTest do
       assert {:validation_error, "some custom error message"} = fun.(%CustomType{some_field: 4})
     end
   end
+
+  describe "min for lists" do
+    test "should return a function that returns :ok if list has at least X items otherwise {:validation_error, message}" do
+      fun = DIN.Validations.Min.execute(5)
+      expected_error_message = "must contain at least 5 items"
+
+      assert :ok = fun.([1, 2, 3, 4, 5])
+      assert :ok = fun.([1, 2, 3, 4, 5, 6])
+      assert {:validation_error, ^expected_error_message} = fun.([1, 2, 3, 4])
+    end
+  end
 end

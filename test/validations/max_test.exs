@@ -47,4 +47,15 @@ defmodule DIN.Validations.MaxTest do
       assert {:validation_error, "some custom error message"} = fun.(%CustomType{some_field: 6})
     end
   end
+
+  describe "max for lists" do
+    test "should return a function that returns :ok if list has less than or equal to X items otherwise {:validation_error, message}" do
+      fun = DIN.Validations.Max.execute(5)
+      expected_error_message = "must contain a maximum of 5 items"
+
+      assert :ok = fun.([1, 2, 3, 4])
+      assert :ok = fun.([1, 2, 3, 4, 5])
+      assert {:validation_error, ^expected_error_message} = fun.([1, 2, 3, 4, 5, 6])
+    end
+  end
 end

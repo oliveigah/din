@@ -66,8 +66,18 @@ defmodule DIN do
       iex> DIN.normalize(input, schema)
       {:ok, %{username: "oliveigah", age: 26, address: %{street: "Baker Street"}}}
   """
-  def normalize(input, schema) do
+  def normalize(input, schema) when is_map(input) and is_map(schema) do
     case do_normalize(input, Map.to_list(schema), %{}, []) do
+      {normalized_input, []} ->
+        {:ok, normalized_input}
+
+      {_normalized_input, errors_list} ->
+        {:error, errors_list}
+    end
+  end
+
+  def normalize(input, schema) when is_map(input) and is_list(schema) do
+    case do_normalize(input, schema, %{}, []) do
       {normalized_input, []} ->
         {:ok, normalized_input}
 
@@ -117,8 +127,11 @@ defmodule DIN do
     end
   end
 
-  defp get_value_from_input(key, input),
+  defp get_value_from_input(key, input) when is_atom(key),
     do: Map.get(input, Atom.to_string(key)) || Map.get(input, key) || :din_val_not_found
+
+  defp get_value_from_input(key, input),
+    do: Map.get(input, key) || :din_val_not_found
 
   defp parse_errors(key, errors_list),
     do: Enum.map(errors_list, fn {_, msg} -> %{name: key, reason: msg} end)
@@ -127,69 +140,99 @@ defmodule DIN do
     do: Enum.filter(errrors_list, fn result -> match?({^type, _}, result) end)
 
   # TYPES
-  @doc scope: :type
   @doc """
   Validates that the input value is a string.
 
   ## Examples
       iex> schema = %{username: [DIN.string()]}
-      iex> input = %{ "username" => "oliveigah"}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "username" => "oliveigah"}, schema)
       {:ok, %{username: "oliveigah"}}
-
-      iex> schema = %{username: [DIN.string()]}
-      iex> input = %{ "username" => 123}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "username" => 123}, schema)
       {:error, [%{name: :username, reason: "must be a string"}]}
   """
-  defdelegate string(), to: DIN.Types
   @doc scope: :type
+  defdelegate string(), to: DIN.Types
+
   @doc """
   Validates that the input value is a number.
 
   ## Examples
-      iex> schema = %{age: [DIN.number()]}
-      iex> input = %{"age" => 26}
-      iex> DIN.normalize(input, schema)
-      {:ok, %{age: 26}}
-
       iex> schema = %{money: [DIN.number()]}
-      iex> input = %{"money" => 12.95}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{"money" => 26}, schema)
+      {:ok, %{money: 26}}
+      iex> DIN.normalize(%{"money" => 12.95}, schema)
       {:ok, %{money: 12.95}}
-
-      iex> schema = %{age: [DIN.number()]}
-      iex> input = %{ "age" => "123"}
-      iex> DIN.normalize(input, schema)
-      {:error, [%{name: :age, reason: "must be a number"}]}
+      iex> DIN.normalize(%{ "money" => "123"}, schema)
+      {:error, [%{name: :money, reason: "must be a number"}]}
   """
-  defdelegate number(), to: DIN.Types
   @doc scope: :type
+  defdelegate number(), to: DIN.Types
+
   @doc """
   Validates that the input value is a map and its value matches the given schema.
 
   ## Examples
       iex> schema = %{address: [DIN.map(%{street: [DIN.string()]})]}
-      iex> input = %{ "address" => %{"street" => "Baker street"}}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "address" => %{"street" => "Baker street"}}, schema)
       {:ok, %{address: %{street: "Baker street"}}}
-
-      iex> schema = %{address: [DIN.map(%{street: [DIN.string()]})]}
-      iex> input = %{ "address" => "baker street"}
-      iex> DIN.normalize(input, schema)
-      {:error, [%{name: :address, reason: "must be an object"}]}
-
-      iex> schema = %{address: [DIN.map(%{street: [DIN.string()]})]}
-      iex> input = %{ "address" => %{"street" => 12}}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "address" => %{"street" => 12}}, schema)
       {:error, [%{name: :address, reason: [%{name: :street, reason: "must be a string"}]}]}
+      iex> DIN.normalize(%{ "address" => "baker street"}, schema)
+      {:error, [%{name: :address, reason: "must be an object"}]}
   """
+  @doc scope: :type
   defdelegate map(schema), to: DIN.Types
+
+  @doc """
+  Validates that the input value is a map
+
+  ## Examples
+      iex> schema = %{address: [DIN.map()]}
+      iex> DIN.normalize(%{ "address" => %{"street" => "Baker street"}}, schema)
+      {:ok, %{address: %{"street" => "Baker street"}}}
+      iex> DIN.normalize(%{ "address" => "baker street"}, schema)
+      {:error, [%{name: :address, reason: "must be an object"}]}
+  """
+  @doc scope: :type
+  defdelegate map(), to: DIN.Types
+
+  @doc """
+  Validates that the input value is a list and all its values matches the given validation list
+
+  ## Examples
+      iex> schema = %{grades: [DIN.list([DIN.number()])]}
+      iex> DIN.normalize(%{"grades" => [1,2,3]}, schema)
+      {:ok, %{grades: [1,2,3]}}
+      iex> DIN.normalize(%{"grades" => 1}, schema)
+      {:error, [%{name: :grades, reason: "must be a list"}]}
+      iex> DIN.normalize(%{"grades" => ["a", 2, "c"]}, schema)
+      {:error, [%{name: :grades, reason: [%{name: "index_3", reason: "must be a number"}, %{name: "index_1", reason: "must be a number"}]}]}
+
+      iex> schema = %{grades: [DIN.list([DIN.map(%{grade: [DIN.number()]})])]}
+      iex> DIN.normalize(%{"grades" => [%{"grade" => 1},%{"grade" => 2},%{"grade" => 3}]}, schema)
+      {:ok, %{grades: [%{grade: 1},%{grade: 2},%{grade: 3}]}}
+      iex> DIN.normalize(%{"grades" => [%{"grade" => "a"},%{"grade" => 2},%{"grade" => 3}]}, schema)
+      {:error, [%{name: :grades, reason: [ %{ name: "index_1", reason: [ %{name: :grade, reason: "must be a number"} ]} ]} ]}
+  """
+  @doc scope: :type
+  defdelegate list(validations), to: DIN.Types
+
+  @doc """
+  Validates that the input value is a list
+
+  ## Examples
+      iex> schema = %{grades: [DIN.list()]}
+      iex> DIN.normalize(%{"grades" => [1,2,3]}, schema)
+      {:ok, %{grades: [1,2,3]}}
+      iex> DIN.normalize(%{"grades" => 1}, schema)
+      {:error, [%{name: :grades, reason: "must be a list"}]}
+  """
+  @doc scope: :type
+  defdelegate list(), to: DIN.Types
 
   # TRANSFORMATIONS
 
   # VALIDATIONS
-  @doc scope: :validation
   @doc """
   Validates that the input has at least the given value.
 
@@ -200,65 +243,63 @@ defmodule DIN do
 
   ## Examples
       iex> schema = %{username: [DIN.min(5)]}
-      iex> input = %{ "username" => "abcde"}
-      iex> DIN.normalize(input, schema)
-      {:ok, %{username: "abcde"}}
-
-      iex> schema = %{username: [DIN.min(5)]}
-      iex> input = %{ "username" => "abcd"}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "username" => "abcde"}, schema)
+      {:ok, %{ username: "abcde"}}
+      iex> DIN.normalize(%{ "username" => "abcd"}, schema)
       {:error, [%{name: :username, reason: "must have at least 5 characters"}]}
 
       iex> schema = %{age: [DIN.min(8)]}
-      iex> input = %{ "age" => 9}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "age" => 9}, schema)
       {:ok, %{age: 9}}
-
-      iex> schema = %{age: [DIN.min(8)]}
-      iex> input = %{ "age" => 7}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "age" => 7}, schema)
       {:error, [%{name: :age, reason: "must be greater than or equal to 8"}]}
 
+      iex> schema = %{items: [DIN.min(3)]}
+      iex> DIN.normalize( %{ "items" => ["a", "b", "c"]}, schema)
+      {:ok, %{items: ["a", "b", "c"]}}
+      iex> DIN.normalize(%{ "items" => ["a", "b"]}, schema)
+      {:error, [%{name: :items, reason: "must contain at least 3 items"}]}
+
       iex> schema = %{age: [DIN.min(8)]}
-      iex> input = %{ "age" => :not_valid_type}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "age" => :not_valid_type}, schema)
       {:error, [%{name: :age, reason: "validation function not applicable for the input type"}]}
   """
-  defdelegate min(min_val), to: DIN.Validations.Min, as: :execute
   @doc scope: :validation
+  defdelegate min(min_val), to: DIN.Validations.Min, as: :execute
+
   @doc """
   Validates that the input has at maximum the given value.
 
   The behavior of this functions varies accordingly to input types.
 
-  - String: Validates input length
-  - Number: Validates input value
+  - String: Validates string length
+  - Number: Validates number value
+  - List: Validates list length
 
   ## Examples
       iex> schema = %{username: [DIN.max(5)]}
-      iex> input = %{ "username" => "abcde"}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "username" => "abcde"}, schema)
       {:ok, %{username: "abcde"}}
-
-      iex> schema = %{username: [DIN.max(5)]}
-      iex> input = %{ "username" => "abcdef"}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "username" => "abcdef"}, schema)
       {:error, [%{name: :username, reason: "must have at maximum 5 characters"}]}
 
       iex> schema = %{age: [DIN.max(7)]}
-      iex> input = %{ "age" => 7}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "age" => 7}, schema)
       {:ok, %{age: 7}}
-
-      iex> schema = %{age: [DIN.max(7)]}
-      iex> input = %{ "age" => 8}
-      iex> DIN.normalize(input, schema)
+      iex> DIN.normalize(%{ "age" => 8}, schema)
       {:error, [%{name: :age, reason: "must be lesser than or equal to 7"}]}
+
+      iex> schema = %{items: [DIN.max(3)]}
+      iex> DIN.normalize( %{ "items" => ["a", "b", "c"]}, schema)
+      {:ok, %{items: ["a", "b", "c"]}}
+      iex> DIN.normalize(%{ "items" => ["a", "b", "c", "d"]}, schema)
+      {:error, [%{name: :items, reason: "must contain a maximum of 3 items"}]}
 
       iex> schema = %{age: [DIN.max(8)]}
       iex> input = %{ "age" => :not_valid_type}
       iex> DIN.normalize(input, schema)
       {:error, [%{name: :age, reason: "validation function not applicable for the input type"}]}
   """
+  @doc scope: :validation
   defdelegate max(max_val), to: DIN.Validations.Max, as: :execute
 end
