@@ -51,8 +51,8 @@ defmodule DIN.TypeTest do
       assert {:ok, [1, 2, 3]} = fun.([1, 2, 3])
 
       assert {:validation_error, error_list} = fun.([5, 6, 7])
-      assert %{name: "index_2", reason: "must be lesser than or equal to 5"} in error_list
-      assert %{name: "index_3", reason: "must be lesser than or equal to 5"} in error_list
+      assert %{name: "index_2", reason: "must be less than or equal to 5"} in error_list
+      assert %{name: "index_3", reason: "must be less than or equal to 5"} in error_list
 
       assert {:validation_error, error_list} = fun.(["1", 2, 3])
       assert %{name: "index_1", reason: "must be a number"} in error_list

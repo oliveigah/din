@@ -27,7 +27,7 @@ defimpl DIN.Validations.Protocols.Max, for: [Integer, Float] do
   def validate(val, max_val) do
     if val <= max_val,
       do: :ok,
-      else: {:validation_error, "must be lesser than or equal to #{max_val}"}
+      else: {:validation_error, "must be less than or equal to #{max_val}"}
   end
 end
 

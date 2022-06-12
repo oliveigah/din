@@ -19,7 +19,7 @@ defmodule DIN.Validations.MaxTest do
   describe "max for numbers" do
     test "should return a function that returns :ok if number is less than or equal to X otherwise {:validation_error, message}" do
       fun = DIN.Validations.Max.execute(5)
-      expected_error_message = "must be lesser than or equal to 5"
+      expected_error_message = "must be less than or equal to 5"
 
       assert :ok = fun.(4)
       assert :ok = fun.(5)

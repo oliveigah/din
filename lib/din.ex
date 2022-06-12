@@ -287,7 +287,7 @@ defmodule DIN do
       iex> DIN.normalize(%{ "age" => 7}, schema)
       {:ok, %{age: 7}}
       iex> DIN.normalize(%{ "age" => 8}, schema)
-      {:error, [%{name: :age, reason: "must be lesser than or equal to 7"}]}
+      {:error, [%{name: :age, reason: "must be less than or equal to 7"}]}
 
       iex> schema = %{items: [DIN.max(3)]}
       iex> DIN.normalize( %{ "items" => ["a", "b", "c"]}, schema)
