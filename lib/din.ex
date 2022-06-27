@@ -41,8 +41,8 @@ defmodule DIN do
   @doc """
   Normalize the input using the given schema
   """
-  def normalize(input, schema) when is_map(input) and is_map(schema) do
-    case do_normalize(input, Map.to_list(schema), %{}, []) do
+  def normalize(input, schema) do
+    case do_normalize(input, parse_schema(schema), %{}, []) do
       {normalized_input, []} ->
         {:ok, normalized_input}
 
@@ -51,7 +51,7 @@ defmodule DIN do
     end
   end
 
-  defp do_normalize(_input, [], acc_input, acc_errors), do: {acc_input, acc_errors}
+  defp do_normalize(_input, [], acc_input, acc_errors), do: {acc_input, List.flatten(acc_errors)}
 
   defp do_normalize(input, [{key, validation_fun_list} | schema_rest], acc_input, acc_errors) do
     value = get_value_from_input(key, input)
@@ -64,13 +64,17 @@ defmodule DIN do
 
       errors ->
         # TODO: REMOVE ++ OPERATOR, USE LIST.FLATTEN INSTEAD
-        new_errors = parse_errors(key, errors) ++ acc_errors
+        new_errors = [parse_errors(key, errors), acc_errors]
         do_normalize(input, schema_rest, acc_input, new_errors)
     end
   end
 
   defp execute_functions(func_list, val) do
     func_list
+    |> Enum.map(fn
+      {priority, func} when is_function(priority) -> {priority.(val), func}
+      other -> other
+    end)
     |> Enum.sort(&(elem(&1, 0) < elem(&2, 0)))
     |> Enum.map(&elem(&1, 1))
     |> do_execute_functions(val, [])
@@ -102,6 +106,31 @@ defmodule DIN do
 
   defp parse_errors(key, errors_list),
     do: Enum.map(errors_list, fn {_, msg} -> %{name: key, reason: msg} end)
+
+  defp parse_schema(schema) do
+    Enum.map(schema, fn {key, func_list} ->
+      {key, Enum.map(func_list, &parse_schema_func/1)}
+    end)
+  end
+
+  defp parse_schema_func({:type, :string}), do: string()
+  defp parse_schema_func({:type, :map}), do: map()
+  defp parse_schema_func({:type, :number}), do: number()
+  defp parse_schema_func({:type, :list}), do: list()
+  defp parse_schema_func({:min, val}), do: min(val)
+  defp parse_schema_func({:max, val}), do: max(val)
+  defp parse_schema_func({:schema, schema}), do: schema(schema)
+
+  defp parse_schema_func({priority, fun} = other)
+       when is_number(priority) and is_function(fun),
+       do: other
+
+  defp parse_schema_func({priority_fun, fun} = other)
+       when is_function(priority_fun) and is_function(fun),
+       do: other
+
+  defp parse_schema_func({key, _args} = _invalid_arg),
+    do: raise("Invalid input validation function #{key}.")
 
   # TYPES
   @doc """
@@ -155,4 +184,6 @@ defmodule DIN do
   """
   @doc scope: :validation
   defdelegate max(max_val), to: DIN.Validations.Max, as: :execute
+
+  defdelegate schema(schema), to: DIN.Validations.Schema, as: :execute
 end
