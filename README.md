@@ -2,20 +2,13 @@
 
 Declarative Input Normalizer
 
-## Installation
+# TODOs
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `din` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:din, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/din>.
-
+- Revisit the posibility of an API like JOI: username: DIN.string().max(5)
+- Optional field validation
+- Regex validation for strings
+- Add comom string patterns (eg: email, ) (what would be a good name? format? )
+- Enum field validation
+- Add truncate transformation for strings
+- Add trim transformation for strings
+- Add date type and proper validations

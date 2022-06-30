@@ -185,5 +185,6 @@ defmodule DIN do
   @doc scope: :validation
   defdelegate max(max_val), to: DIN.Validations.Max, as: :execute
 
+  @doc scope: :validation
   defdelegate schema(schema), to: DIN.Validations.Schema, as: :execute
 end
